@@ -328,7 +328,8 @@ if compile_warmup > 0 and "cuda" in device:
     print(f"\n--- Compile warmup: {compile_warmup} steps ---")
 
     # Save initial state BEFORE warmup
-    initial_model_state = copy.deepcopy(model.state_dict())
+    orig_model = model._orig_mod if hasattr(model, '_orig_mod') else model
+    initial_model_state = copy.deepcopy(orig_model.state_dict())
     initial_optimizer_states = [copy.deepcopy(opt.state_dict()) for opt in optimizers]
     initial_scheduler_state = copy.deepcopy(scheduler.state_dict()) if scheduler else None
 
@@ -350,6 +351,7 @@ if compile_warmup > 0 and "cuda" in device:
 
     # Full reset — restore everything
     print("--- Reset after compile warmup ---")
+    # Restore to _orig_mod, not compiled graph
     if hasattr(model, '_orig_mod'):
         model._orig_mod.load_state_dict(initial_model_state)
     else:
