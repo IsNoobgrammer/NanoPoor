@@ -299,14 +299,17 @@ else:
 
 # Compile the model AFTER potentially loading state dict and moving to device
 # And AFTER distributed init is done
-if "cuda" in device:
+# NOTE: torch.compile + NCCL distributed is broken on PyTorch 2.x (FakeTensorMode
+# cleanup bug in inductor). Skip compile when distributed is active.
+if "cuda" in device and not distributed_initialized:
     print("compiling the model...")
     try:
-        # Disable dynamic shapes if causing issues with compile/distributed
         model = torch.compile(model, fullgraph=False, dynamic=False)
         print("compiled")
     except Exception as e:
         print(f"Torch compile failed: {e}. Running without compile.")
+elif distributed_initialized:
+    print("Skipping torch.compile (incompatible with distributed NCCL)")
 
 
 p = sum(p.numel() for p in m.parameters() if p.requires_grad) # Count trainable params
