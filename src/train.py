@@ -19,6 +19,7 @@ import torch.distributed as dist # <-- Added for distributed init
 
 import model
 from model import Transformer
+from losses import SequenceLoss
 from torch.optim.lr_scheduler import SequentialLR, LinearLR, CosineAnnealingLR
 
 import plot
@@ -54,6 +55,7 @@ parser.add_argument('--use_expert_bias', type=bool, default=True)
 
 parser.add_argument('--types', nargs='*', type=str, default= ['mlp','moe','mlp','moe'])
 parser.add_argument('--device', type=str, default="cpu")
+parser.add_argument('--seq_loss_coeff', type=float, default=0.0, help='Coefficient for sequence-level aux loss (0 = disabled)')
 
 args = parser.parse_args()
 
@@ -92,7 +94,11 @@ print(f"  n_experts={args.n_experts}, types={args.types}")
 print(f"  lr={lr}, min_lr={min_lr}, warmup_iters={warmup_iters}")
 print(f"  max_iters={max_iters}, eval_interval={eval_interval}")
 print(f"  device={args.device}, data_dir={args.data_dir}")
+print(f"  seq_loss_coeff={args.seq_loss_coeff}")
 print("=" * 60)
+
+# Sequence-level auxiliary loss
+seq_loss_fn = SequenceLoss(vocab_size=model.config.get('vocab_size', 50257), coeff=args.seq_loss_coeff)
 
 beta1 = 0.9 # AdamW beta1
 beta2 = 0.95 # AdamW beta2
@@ -385,8 +391,11 @@ try: # Wrap training loop in try...finally for cleanup
             current_ctx = ctx if scaler.is_enabled() else nullcontext()
 
             with current_ctx:
-                 logits, loss, rw = model(xb, yb)
-                 loss = loss / grad_accum_steps # Scale loss for accumulation
+                 logits, cce_loss, rw = model(xb, yb)
+                 # logits: [B, T, V], cce_loss: scalar (CCE only)
+                 # Add sequence-level aux loss (0 if coeff=0)
+                 seq_loss = seq_loss_fn(logits, yb)
+                 loss = (cce_loss + seq_loss) / grad_accum_steps
 
             if rw: # Check if router weights were returned
                 all_router_weights_accum.extend(rw)

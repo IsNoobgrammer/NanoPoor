@@ -565,9 +565,9 @@ class Transformer(nn.Module):
             loss = None
         else:
             B, T, C = logits.shape
-            logits = logits.view(B * T, C)
-            targets = targets.view(B * T)
-            loss = F.cross_entropy(logits, targets) 
+            logits_flat = logits.view(B * T, C)
+            targets_flat = targets.view(B * T)
+            loss = F.cross_entropy(logits_flat, targets_flat)
 
         return logits, loss, all_router_weights
 
