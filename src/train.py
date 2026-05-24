@@ -98,6 +98,8 @@ print(f"  device={args.device}, data_dir={args.data_dir}")
 print(f"  seq_loss_coeff={args.seq_loss_coeff}")
 print("=" * 60)
 
+os.makedirs('checkpoints', exist_ok=True)
+
 # Sequence-level auxiliary loss (initialized after vocab_size is known)
 seq_loss_fn = None
 
