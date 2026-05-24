@@ -1,7 +1,7 @@
 # NanoPoor
 NanoGPT-speedrunning for the poor T4 enjoyers
 
-[Colab Notebook](https://colab.research.google.com/drive/1x87U-mCZCt7Kwc5-HGPOR1NVCOYAN1dr?usp=sharing) 
+[Colab Notebook](https://colab.research.google.com/drive/1EpbdLxtUg8Wdt5Y4rqo3jcHjm0QfJnT7?usp=sharing) 
 
 Inspired by [Modded NanoGPT](https://github.com/KellerJordan/modded-nanogpt) and my goat [Jonas Geiping (Cramming)](https://arxiv.org/pdf/2212.14034), I trained a custom GPT I've been working on over at [Dagonet](https://github.com/BambooML/Dagonet), got to the 3.28 val loss on a single T4.
 
