@@ -1,0 +1,51 @@
+--- Attempting Distributed Initialization (TCP Method, Device: cuda) ---
+[Gloo] Rank 0 is connected to 0 peer ranks. Expected number of connected peer ranks is : 0
+Successfully called init_process_group (TCP) with backend: gloo.
+Is distributed initialized after setup? True
+--- Finished Distributed Initialization Attempt ---
+found vocab_size = 50257 (inside data/tokenized_data/meta.pkl)
+Starting run C2wrVt from scratch
+num Muon parameters: 24,720,384
+num AdamW parameters: 48,819,712
+Using Muon (optimizer 0) and AdamW (optimizer 1)
+compiling the model...
+compiled
+73.540096 M trainable parameters
+
+Starting training loop from iteration 0...
+/usr/local/lib/python3.12/dist-packages/torch/_dynamo/utils.py:3694: UserWarning: Mismatch dtype between input and weight: input dtype = c10::Half, weight dtype = float, Cannot dispatch to fused implementation. (Triggered internally at /pytorch/aten/src/ATen/native/layer_norm.cpp:344.)
+  return node.target(*args, **kwargs)  # type: ignore[operator]
+step: 10, train loss: 8.0098, val loss: 8.0130, elapsed time: 0.68 min, dt: 40812.27 ms
+step: 20, train loss: 6.7488, val loss: 6.7527, elapsed time: 1.11 min, dt: 25522.61 ms
+step: 30, train loss: 4.8714, val loss: 4.8722, elapsed time: 1.45 min, dt: 20711.79 ms
+step: 40, train loss: 3.8792, val loss: 3.8604, elapsed time: 1.79 min, dt: 20130.07 ms
+step: 50, train loss: 3.8525, val loss: 3.8500, elapsed time: 2.12 min, dt: 19893.50 ms
+step: 60, train loss: 3.8273, val loss: 3.8530, elapsed time: 2.46 min, dt: 20241.63 ms
+step: 70, train loss: 3.8023, val loss: 3.8106, elapsed time: 2.79 min, dt: 20331.92 ms
+step: 80, train loss: 3.7685, val loss: 3.7736, elapsed time: 3.13 min, dt: 20025.93 ms
+step: 90, train loss: 3.6862, val loss: 3.6385, elapsed time: 3.46 min, dt: 20023.02 ms
+step: 100, train loss: 3.4153, val loss: 3.4058, elapsed time: 3.79 min, dt: 19967.60 ms
+step: 110, train loss: 3.0253, val loss: 3.0457, elapsed time: 4.13 min, dt: 20232.03 ms
+Saving checkpoint to checkpoints/C2wrVt_check_110.pt
+step: 120, train loss: 2.7167, val loss: 2.7097, elapsed time: 4.56 min, dt: 25969.53 ms
+Saving checkpoint to checkpoints/C2wrVt_check_120.pt
+step: 130, train loss: 2.4458, val loss: 2.4184, elapsed time: 4.93 min, dt: 22149.39 ms
+Saving checkpoint to checkpoints/C2wrVt_check_130.pt
+step: 140, train loss: 2.2507, val loss: 2.2477, elapsed time: 5.30 min, dt: 21720.03 ms
+Saving checkpoint to checkpoints/C2wrVt_check_140.pt
+step: 150, train loss: 2.0717, val loss: 2.0626, elapsed time: 5.65 min, dt: 21559.76 ms
+Saving checkpoint to checkpoints/C2wrVt_check_150.pt
+step: 160, train loss: 1.9106, val loss: 1.8964, elapsed time: 6.09 min, dt: 26275.58 ms
+Saving checkpoint to checkpoints/C2wrVt_check_160.pt
+Destroyed default process group.
+[rank0]: Traceback (most recent call last):
+  File "/content/NanoPoor-er/src/NanoPoor/src/train.py", line 357, in <module>
+    torch.save(checkpoint, checkpoint_path)
+  File "/usr/local/lib/python3.12/dist-packages/torch/serialization.py", line 977, in save
+    _save(
+  File "/usr/local/lib/python3.12/dist-packages/torch/serialization.py", line 1286, in _save
+    zip_file.write_record(name, storage, num_bytes)
+  KeyboardInterrupt
+
+Run interrupted at step 160 (Colab disconnect). Val loss 1.8964 at step 160.
+Config: --ctx_len 1024 --lr 5e-4 --min_lr 1e-5 --n_embd 256 --n_head 8 --n_layer 8 --n_experts 8 --types mlp moe mlp moe mlp moe mlp moe --max_iters 1000 --eval_interval 10 --batch_size 8 --grad_accum 4 --device cuda --data_dir tokenized_data --warmup_iters 50
