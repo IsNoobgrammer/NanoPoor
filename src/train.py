@@ -4,6 +4,7 @@ import os
 import math
 import time
 import glob
+import gc
 import torch
 import string
 import random
@@ -41,7 +42,6 @@ parser.add_argument('--dropout', type=float, default=0.02)
 parser.add_argument('--max_iters', type=int, default=200)
 parser.add_argument('--eval_iters', type=int, default=20)
 parser.add_argument('--warmup_iters', type=int, default=10)
-parser.add_argument('--compile_warmup', type=int, default=0, help='Steps to skip from timing (torch.compile warmup overhead)')
 
 parser.add_argument('--resume', type=bool, default=False)
 parser.add_argument('--res_path', type=str, default="")
@@ -84,7 +84,6 @@ min_lr = args.min_lr # Now float
 max_iters = args.max_iters
 eval_iters = args.eval_iters
 warmup_iters = args.warmup_iters
-compile_warmup = args.compile_warmup
 
 # Print hyperparams banner (first thing in the log)
 print("=" * 60)
@@ -94,7 +93,7 @@ print(f"  effective_tokens={batch_size * block_size * grad_accum_steps}")
 print(f"  n_embd={args.n_embd}, n_head={args.n_head}, n_layer={args.n_layer}")
 print(f"  n_experts={args.n_experts}, types={args.types}")
 print(f"  lr={lr}, min_lr={min_lr}, warmup_iters={warmup_iters}")
-print(f"  max_iters={max_iters}, eval_interval={eval_interval}, compile_warmup={compile_warmup}")
+print(f"  max_iters={max_iters}, eval_interval={eval_interval}")
 print(f"  device={args.device}, data_dir={args.data_dir}")
 print(f"  seq_loss_coeff={args.seq_loss_coeff}")
 print("=" * 60)
@@ -322,10 +321,14 @@ if "cuda" in device:
 p = sum(p.numel() for p in m.parameters() if p.requires_grad) # Count trainable params
 print(f"{p/1e6:.6f} M trainable parameters")
 
-# --- Compile Warmup (proper reset, like modded-nanogpt) ---
-if compile_warmup > 0 and "cuda" in device:
+# --- Compile Warmup (modded-nanogpt style: real training steps, then full reset) ---
+# Run actual training steps to warmup torch.compile kernels, then reset
+# so the warmup doesn't affect training. This covers initial compilation
+# and ensures all code paths are compiled before the timed loop starts.
+if "cuda" in device:
     import copy
-    print(f"\n--- Compile warmup: {compile_warmup} steps ---")
+    warmup_steps = 3  # enough to trigger compilation of all code paths
+    print(f"\n--- Warming up torch.compile kernels ({warmup_steps} steps) ---")
 
     # Save initial state BEFORE warmup
     orig_model = model._orig_mod if hasattr(model, '_orig_mod') else model
@@ -334,24 +337,31 @@ if compile_warmup > 0 and "cuda" in device:
     initial_scheduler_state = copy.deepcopy(scheduler.state_dict()) if scheduler else None
 
     model.train()
-    for warmup_step in range(compile_warmup):
-        xb, yb = get_batch('train')
-        with ctx:
-            logits, cce_loss, rw = model(xb, yb)
-            seq_loss = seq_loss_fn(logits, yb)
-            loss = cce_loss + args.seq_loss_coeff * seq_loss
-        scaler.scale(loss).backward()
-        scaler.step(optimizers[0])  # Muon
-        scaler.step(optimizers[1])  # AdamW
+    for warmup_step in range(warmup_steps):
+        loss_accum = 0.0
+        for micro_step in range(grad_accum_steps):
+            xb, yb = get_batch('train')
+            with ctx:
+                logits, cce_loss, rw = model(xb, yb)
+                seq_loss = seq_loss_fn(logits, yb)
+                loss = (cce_loss + args.seq_loss_coeff * seq_loss) / grad_accum_steps
+            scaler.scale(loss).backward()
+            loss_accum += loss.item() * grad_accum_steps
+
+        # Full optimizer step (same as real training loop)
+        for opt in optimizers:
+            scaler.unscale_(opt)
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm)
+        for opt in optimizers:
+            scaler.step(opt)
         scaler.update()
         for opt in optimizers:
             opt.zero_grad(set_to_none=True)
         if scheduler:
             scheduler.step()
 
-    # Full reset — restore everything
-    print("--- Reset after compile warmup ---")
-    # Restore to _orig_mod, not compiled graph
+    # Full reset — restore model, optimizer, scheduler to initial state
+    print("Resetting model after warmup")
     if hasattr(model, '_orig_mod'):
         model._orig_mod.load_state_dict(initial_model_state)
     else:
@@ -362,7 +372,7 @@ if compile_warmup > 0 and "cuda" in device:
         scheduler.load_state_dict(initial_scheduler_state)
     model.zero_grad(set_to_none=True)
     del initial_model_state, initial_optimizer_states, initial_scheduler_state
-    import gc; gc.collect()
+    gc.collect()
     torch.cuda.empty_cache()
 
 # --- Training Loop ---
@@ -475,8 +485,6 @@ try:
         # Step the scheduler (only affects AdamW)
         if scheduler:
              scheduler.step()
-             if iter == warmup_iters:
-                 print(f">>> Warmup finished at iter {iter}. Cosine annealing started.")
 
         # Update expert biases (if using DS-MoE and weights were collected)
         if all_router_weights_accum and hasattr(model, 'update_expert_biases'):
