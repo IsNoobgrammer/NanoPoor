@@ -29,3 +29,9 @@ As [@main_horse](https://x.com/main_horse/status/1907238044434104633) pointed ou
 | Ranking  | Time - date | Data | Person | Description | log |
 | -------- | ----------- | ---- | ------ | ----------- | --- |
 | 1st      | 7.63m - 4/1/25 | ~6.96M tok (1024 * 10 * 4 * 170) | Vatsa  | Used an A100 with (15.04m - 4/1/25) run to see how I look on a real GPU | [log](https://github.com/VatsaDev/NanoPoor/blob/main/logs/Muon_run.txt) |
+
+## Notes
+
+**Warmup and torch.compile**: On T4 (Colab), `torch.compile` needs a few warmup steps to fully trace and compile the model graph. With the default `--warmup_iters 10`, the first ~30 steps are slow because compile is still optimizing in the background. Setting `--warmup_iters 50` gives the compiler enough breathing room — steps after warmup are ~20% faster and the loss curve is smoother. The warmup learning rate ramp also benefits from more steps at this scale.
+
+**Distributed backend**: Uses `gloo` (not `nccl`) for single-GPU Muon. NCCL + `torch.compile` triggers a `FakeTensorMode` cleanup crash in the inductor on PyTorch 2.x. Gloo avoids this — Muon only needs `dist.is_initialized()`, not NCCL specifically.

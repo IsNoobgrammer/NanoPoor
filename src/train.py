@@ -82,6 +82,18 @@ max_iters = args.max_iters
 eval_iters = args.eval_iters
 warmup_iters = args.warmup_iters
 
+# Print hyperparams banner (first thing in the log)
+print("=" * 60)
+print("Hyperparams:")
+print(f"  batch_size={batch_size}, ctx_len={block_size}, grad_accum={grad_accum_steps}")
+print(f"  effective_tokens={batch_size * block_size * grad_accum_steps}")
+print(f"  n_embd={args.n_embd}, n_head={args.n_head}, n_layer={args.n_layer}")
+print(f"  n_experts={args.n_experts}, types={args.types}")
+print(f"  lr={lr}, min_lr={min_lr}, warmup_iters={warmup_iters}")
+print(f"  max_iters={max_iters}, eval_interval={eval_interval}")
+print(f"  device={args.device}, data_dir={args.data_dir}")
+print("=" * 60)
+
 beta1 = 0.9 # AdamW beta1
 beta2 = 0.95 # AdamW beta2
 weight_decay = 1e-1
