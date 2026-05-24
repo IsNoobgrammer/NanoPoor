@@ -99,8 +99,8 @@ print(f"  device={args.device}, data_dir={args.data_dir}")
 print(f"  seq_loss_coeff={args.seq_loss_coeff}")
 print("=" * 60)
 
-# Sequence-level auxiliary loss
-seq_loss_fn = SequenceLoss(vocab_size=model.config.get('vocab_size', 50257), coeff=args.seq_loss_coeff)
+# Sequence-level auxiliary loss (initialized after vocab_size is known)
+seq_loss_fn = None
 
 beta1 = 0.9 # AdamW beta1
 beta2 = 0.95 # AdamW beta2
@@ -195,8 +195,11 @@ if os.path.exists(meta_path):
     meta_vocab_size = meta['vocab_size']
     print(f"found vocab_size = {meta_vocab_size} (inside {meta_path})")
     model.config["vocab_size"] = meta_vocab_size
+    # Initialize sequence loss now that vocab_size is known
+    seq_loss_fn = SequenceLoss(vocab_size=meta_vocab_size, coeff=args.seq_loss_coeff)
 else:
     print(f"Warning: meta.pkl not found at {meta_path}. Using default vocab size: {model.config['vocab_size']}")
+    seq_loss_fn = SequenceLoss(vocab_size=model.config['vocab_size'], coeff=args.seq_loss_coeff)
 
 # --- loss check ---
 @torch.no_grad()
