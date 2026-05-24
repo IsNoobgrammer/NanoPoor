@@ -1,6 +1,8 @@
 # Training Loop
 
 import os
+os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"  # reduce CUDA memory fragmentation
+
 import math
 import time
 import glob
@@ -119,6 +121,12 @@ resume_checkpoint = args.res_path
 device = args.device
 model.config['device'] = args.device
 model.config.update(vars(args))
+
+# --- CUDA Context Initialization (modded-nanogpt style) ---
+# Pre-initialize CUDA context + autograd engine before any real work.
+# Prevents latent init overhead on first GPU operation.
+if 'cuda' in device:
+    torch.empty(1, device=device, requires_grad=True).backward()
 
 # --- Distributed Initialization for Muon (TCP method) ---
 # Muon requires dist.is_initialized() but does NOT need NCCL specifically.
@@ -314,6 +322,8 @@ else:
 if "cuda" in device:
     print("compiling the model...")
     try:
+        # fullgraph=False: MoE routing has data-dependent control flow (topk → scatter)
+        # which prevents full graph capture. If you remove MoE, try fullgraph=True.
         model = torch.compile(model, fullgraph=False, dynamic=False)
         print("compiled")
     except Exception as e:
@@ -329,7 +339,7 @@ print(f"{p/1e6:.6f} M trainable parameters")
 # and ensures all code paths are compiled before the timed loop starts.
 if "cuda" in device:
     import copy
-    warmup_steps = 3  # enough to trigger compilation of all code paths
+    warmup_steps = 20  # cover all compiled code paths (20 * bs * ga tokens)
     print(f"\n--- Warming up torch.compile kernels ({warmup_steps} steps) ---")
 
     # Save initial state BEFORE warmup
