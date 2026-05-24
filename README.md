@@ -28,7 +28,7 @@ As [@main_horse](https://x.com/main_horse/status/1907238044434104633) pointed ou
 
 | Ranking  | Time - date | Data | Person | Description | log |
 | -------- | ----------- | ---- | ------ | ----------- | --- |
-| 1st      | 6.09m - 5/24/25 | ~5.24M tok (1024 * 8 * 4 * 160) | IsNoobGrammer | gloo backend fix, warmup 50 (see Notes), interrupted at step 160 (val loss 1.89) | [log](logs/isnoobgrammer_t4_run.txt) |
+| 1st      | 4.13m - 5/24/25 | ~3.60M tok (1024 * 8 * 4 * 110) | IsNoobGrammer | gloo backend fix, warmup 50 (see Notes), val 3.05 @ step 110 | [log](logs/isnoobgrammer_t4_run.txt) |
 | 2nd      | 7.63m - 4/1/25 | ~6.96M tok (1024 * 10 * 4 * 170) | Vatsa  | Used an A100 with (15.04m - 4/1/25) run to see how I look on a real GPU | [log](https://github.com/VatsaDev/NanoPoor/blob/main/logs/Muon_run.txt) |
 
 ## Notes
