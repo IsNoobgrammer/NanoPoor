@@ -322,27 +322,55 @@ if "cuda" in device:
 p = sum(p.numel() for p in m.parameters() if p.requires_grad) # Count trainable params
 print(f"{p/1e6:.6f} M trainable parameters")
 
-# Create directories if they don't exist
-if not os.path.exists("checkpoints"):
-    os.makedirs("checkpoints")
-if not os.path.exists("plots"):
-    os.makedirs("plots")
+# --- Compile Warmup (proper reset, like modded-nanogpt) ---
+if compile_warmup > 0 and "cuda" in device:
+    import copy
+    print(f"\n--- Compile warmup: {compile_warmup} steps ---")
+
+    # Save initial state BEFORE warmup
+    initial_model_state = copy.deepcopy(model.state_dict())
+    initial_optimizer_states = [copy.deepcopy(opt.state_dict()) for opt in optimizers]
+    initial_scheduler_state = copy.deepcopy(scheduler.state_dict()) if scheduler else None
+
+    model.train()
+    for warmup_step in range(compile_warmup):
+        xb, yb = get_batch('train')
+        with ctx:
+            logits, cce_loss, rw = model(xb, yb)
+            seq_loss = seq_loss_fn(logits, yb)
+            loss = cce_loss + args.seq_loss_coeff * seq_loss
+        scaler.scale(loss).backward()
+        scaler.step(optimizers[0])  # Muon
+        scaler.step(optimizers[1])  # AdamW
+        scaler.update()
+        for opt in optimizers:
+            opt.zero_grad(set_to_none=True)
+        if scheduler:
+            scheduler.step()
+
+    # Full reset — restore everything
+    print("--- Reset after compile warmup ---")
+    if hasattr(model, '_orig_mod'):
+        model._orig_mod.load_state_dict(initial_model_state)
+    else:
+        model.load_state_dict(initial_model_state)
+    for opt, state in zip(optimizers, initial_optimizer_states):
+        opt.load_state_dict(state)
+    if scheduler and initial_scheduler_state:
+        scheduler.load_state_dict(initial_scheduler_state)
+    model.zero_grad(set_to_none=True)
+    del initial_model_state, initial_optimizer_states, initial_scheduler_state
+    import gc; gc.collect()
+    torch.cuda.empty_cache()
 
 # --- Training Loop ---
-print(f"\nStarting training loop from iteration {start_iter} (warmup: {warmup_iters} iters, compile_warmup: {compile_warmup} iters)...")
+print(f"\nStarting training loop from iteration {start_iter}...")
 time_s = time.time()
 prev_time = time_s
-compile_warmup_done = (compile_warmup == 0)
 
-try: # Wrap training loop in try...finally for cleanup
+try:
+    # Wrap training loop in try...finally for cleanup
     for iter in range(start_iter, max_iters + 1):
-
-        # Reset timer after compile warmup (exclude compile tracing from speedrun timing)
-        if not compile_warmup_done and iter >= compile_warmup:
-            compile_warmup_done = True
-            time_s = time.time()
-            prev_time = time_s
-            print(f">>> Compile warmup finished at iter {iter}. Timer reset. Speedrun starts now.")
 
         # Evaluate loss periodically
         if (iter % eval_interval == 0 or (iter < 100 and iter % 10 == 0) or iter == max_iters) and iter > 0:
