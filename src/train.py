@@ -41,6 +41,7 @@ parser.add_argument('--dropout', type=float, default=0.02)
 parser.add_argument('--max_iters', type=int, default=200)
 parser.add_argument('--eval_iters', type=int, default=20)
 parser.add_argument('--warmup_iters', type=int, default=10)
+parser.add_argument('--compile_warmup', type=int, default=0, help='Steps to skip from timing (torch.compile warmup overhead)')
 
 parser.add_argument('--resume', type=bool, default=False)
 parser.add_argument('--res_path', type=str, default="")
@@ -83,6 +84,7 @@ min_lr = args.min_lr # Now float
 max_iters = args.max_iters
 eval_iters = args.eval_iters
 warmup_iters = args.warmup_iters
+compile_warmup = args.compile_warmup
 
 # Print hyperparams banner (first thing in the log)
 print("=" * 60)
@@ -92,7 +94,7 @@ print(f"  effective_tokens={batch_size * block_size * grad_accum_steps}")
 print(f"  n_embd={args.n_embd}, n_head={args.n_head}, n_layer={args.n_layer}")
 print(f"  n_experts={args.n_experts}, types={args.types}")
 print(f"  lr={lr}, min_lr={min_lr}, warmup_iters={warmup_iters}")
-print(f"  max_iters={max_iters}, eval_interval={eval_interval}")
+print(f"  max_iters={max_iters}, eval_interval={eval_interval}, compile_warmup={compile_warmup}")
 print(f"  device={args.device}, data_dir={args.data_dir}")
 print(f"  seq_loss_coeff={args.seq_loss_coeff}")
 print("=" * 60)
@@ -324,12 +326,20 @@ if not os.path.exists("plots"):
     os.makedirs("plots")
 
 # --- Training Loop ---
-print(f"\nStarting training loop from iteration {start_iter} (warmup: {warmup_iters} iters)...")
+print(f"\nStarting training loop from iteration {start_iter} (warmup: {warmup_iters} iters, compile_warmup: {compile_warmup} iters)...")
 time_s = time.time()
 prev_time = time_s
+compile_warmup_done = (compile_warmup == 0)
 
 try: # Wrap training loop in try...finally for cleanup
     for iter in range(start_iter, max_iters + 1):
+
+        # Reset timer after compile warmup (exclude compile tracing from speedrun timing)
+        if not compile_warmup_done and iter >= compile_warmup:
+            compile_warmup_done = True
+            time_s = time.time()
+            prev_time = time_s
+            print(f">>> Compile warmup finished at iter {iter}. Timer reset. Speedrun starts now.")
 
         # Evaluate loss periodically
         if (iter % eval_interval == 0 or (iter < 100 and iter % 10 == 0) or iter == max_iters) and iter > 0:
