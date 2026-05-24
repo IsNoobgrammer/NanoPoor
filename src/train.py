@@ -100,32 +100,20 @@ model.config['device'] = args.device
 model.config.update(vars(args))
 
 # --- Distributed Initialization for Muon (TCP method) ---
+# Muon requires dist.is_initialized() but does NOT need NCCL specifically.
+# Use 'gloo' backend to avoid torch.compile + NCCL FakeTensorMode crash.
 distributed_initialized = False
 print(f"\n--- Attempting Distributed Initialization (TCP Method, Device: {device}) ---")
-# Only attempt initialization if CUDA is used and Muon is present in the expected optimizers
-# (Muon might strictly require CUDA/distributed backend)
-muon_in_use = True # Assume Muon is intended unless configure_optimizers excludes it
 if 'cuda' in device:
     try:
-        # Choose backend
-        backend = 'gloo'
-        if dist.is_nccl_available():
-            backend = 'nccl'
-        else:
-            print("WARNING: NCCL backend not available, using 'gloo'. Muon performance might be affected.")
-
-        # Use TCP initialization (simpler for single node)
-        init_url = f"tcp://localhost:12355" # Use a free port
-        dist.init_process_group(backend=backend, init_method=init_url, world_size=1, rank=0)
-        print(f"Successfully called init_process_group (TCP) with backend: {backend}.")
+        init_url = "tcp://localhost:12355"
+        dist.init_process_group(backend='gloo', init_method=init_url, world_size=1, rank=0)
+        print("Successfully called init_process_group (TCP) with backend: gloo.")
         distributed_initialized = True
         print(f"Is distributed initialized after setup? {dist.is_initialized()}")
-
     except Exception as e:
         print(f"ERROR: Failed to initialize process group (TCP): {e}")
         print("Muon optimizer might fail if distributed initialization is required.")
-        # Consider exiting if Muon is critical and initialization fails:
-        # exit(1)
 else:
      print("INFO: Not initializing distributed process group (device is not CUDA).")
 print("--- Finished Distributed Initialization Attempt ---")
@@ -299,17 +287,13 @@ else:
 
 # Compile the model AFTER potentially loading state dict and moving to device
 # And AFTER distributed init is done
-# NOTE: torch.compile + NCCL distributed is broken on PyTorch 2.x (FakeTensorMode
-# cleanup bug in inductor). Skip compile when distributed is active.
-if "cuda" in device and not distributed_initialized:
+if "cuda" in device:
     print("compiling the model...")
     try:
         model = torch.compile(model, fullgraph=False, dynamic=False)
         print("compiled")
     except Exception as e:
         print(f"Torch compile failed: {e}. Running without compile.")
-elif distributed_initialized:
-    print("Skipping torch.compile (incompatible with distributed NCCL)")
 
 
 p = sum(p.numel() for p in m.parameters() if p.requires_grad) # Count trainable params
