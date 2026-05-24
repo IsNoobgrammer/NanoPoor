@@ -306,7 +306,7 @@ if not os.path.exists("plots"):
     os.makedirs("plots")
 
 # --- Training Loop ---
-print(f"\nStarting training loop from iteration {start_iter}...")
+print(f"\nStarting training loop from iteration {start_iter} (warmup: {warmup_iters} iters)...")
 time_s = time.time()
 prev_time = time_s
 
@@ -411,6 +411,8 @@ try: # Wrap training loop in try...finally for cleanup
         # Step the scheduler (only affects AdamW)
         if scheduler:
              scheduler.step()
+             if iter == warmup_iters:
+                 print(f">>> Warmup finished at iter {iter}. Cosine annealing started.")
 
         # Update expert biases (if using DS-MoE and weights were collected)
         if all_router_weights_accum and hasattr(model, 'update_expert_biases'):
