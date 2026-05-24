@@ -393,9 +393,9 @@ try: # Wrap training loop in try...finally for cleanup
             with current_ctx:
                  logits, cce_loss, rw = model(xb, yb)
                  # logits: [B, T, V], cce_loss: scalar (CCE only)
-                 # Add sequence-level aux loss (0 if coeff=0)
+                 # Add sequence-level aux loss
                  seq_loss = seq_loss_fn(logits, yb)
-                 loss = (cce_loss + seq_loss) / grad_accum_steps
+                 loss = (cce_loss + args.seq_loss_coeff * seq_loss) / grad_accum_steps
 
             if rw: # Check if router weights were returned
                 all_router_weights_accum.extend(rw)

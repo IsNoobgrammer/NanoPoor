@@ -53,4 +53,4 @@ class SequenceLoss(nn.Module):
         # L1 distance normalized by vocab_size
         l1 = (predicted_values - target_values).abs() / self.vocab_size  # [B, T]
 
-        return l1.mean() * self.coeff
+        return l1.mean()
